@@ -1,0 +1,229 @@
+#!/bin/bash
+
+# Ragnarok Online Agent Auto-Setup Script (Linux/Mac)
+# This script automatically sets up the RO Agent for your project
+
+echo "🗡️ Ragnarok Online Server Management Agent Setup"
+echo "=================================================="
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(pwd)"
+
+echo "📍 Project Directory: $PROJECT_DIR"
+echo "📍 Agent Directory: $SCRIPT_DIR"
+
+# Check if we're in a RO server directory
+echo ""
+echo "🔍 Detecting RO server structure..."
+
+if [ -d "rathena" ] || [ -d "npc" ] || [ -d "db" ] || [ -d "conf" ]; then
+    echo "✅ Detected rAthena server structure"
+    EMULATOR="rathena"
+elif [ -d "hercules" ] || [ -f "hercules.conf" ]; then
+    echo "✅ Detected Hercules server structure"
+    EMULATOR="hercules"
+elif [ -d "openkore" ] || [ -f "openkore.pl" ]; then
+    echo "✅ Detected OpenKore bot structure"
+    EMULATOR="openkore"
+else
+    echo "⚠️  No specific emulator detected - treating as generic RO project"
+    EMULATOR="generic"
+fi
+
+# Create necessary directories
+echo ""
+echo "📁 Creating necessary directories..."
+
+mkdir -p "$PROJECT_DIR/ANALYSIS_CACHE/errors"
+mkdir -p "$PROJECT_DIR/ANALYSIS_CACHE/patterns"
+mkdir -p "$PROJECT_DIR/ANALYSIS_CACHE/scripts"
+mkdir -p "$PROJECT_DIR/templates"
+mkdir -p "$PROJECT_DIR/docs"
+
+echo "✅ Directories created"
+
+# Check Python installation
+echo ""
+echo "🐍 Checking Python installation..."
+
+if command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+    echo "✅ Python 3 found"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+    echo "✅ Python found"
+else
+    echo "❌ Python not found. Please install Python 3.8+"
+    exit 1
+fi
+
+# Check Python version
+PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | grep -oP '\d+\.\d+')
+echo "📊 Python Version: $PYTHON_VERSION"
+
+# Create virtual environment (optional)
+echo ""
+read -p "🤔 Create virtual environment? (recommended) [Y/n]: " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    echo "📦 Creating virtual environment..."
+    $PYTHON_CMD -m venv ro_agent_env
+    if [ -d "ro_agent_env" ]; then
+        echo "✅ Virtual environment created: ro_agent_env"
+        echo "💡 To activate: source ro_agent_env/bin/activate"
+        PYTHON_CMD="$PROJECT_DIR/ro_agent_env/bin/python"
+    fi
+fi
+
+# Install dependencies
+echo ""
+echo "📦 Installing dependencies..."
+
+# Create requirements.txt if it doesn't exist
+if [ ! -f "$SCRIPT_DIR/requirements.txt" ]; then
+    cat > "$SCRIPT_DIR/requirements.txt" << 'EOF'
+click>=8.0.0
+requests>=2.25.0
+pyyaml>=5.4.0
+EOF
+    echo "✅ Created requirements.txt"
+fi
+
+# Install requirements
+$PYTHON_CMD -m pip install --upgrade pip
+$PYTHON_CMD -m pip install -r "$SCRIPT_DIR/requirements.txt"
+
+if [ $? -eq 0 ]; then
+    echo "✅ Dependencies installed successfully"
+else
+    echo "⚠️  Some dependencies may have failed to install"
+fi
+
+# Create configuration file
+echo ""
+echo "⚙️  Creating configuration..."
+
+CONFIG_FILE="$PROJECT_DIR/ro_agent_config.yml"
+if [ ! -f "$CONFIG_FILE" ]; then
+    cat > "$CONFIG_FILE" << EOF
+# Ragnarok Online Agent Configuration
+emulator: $EMULATOR
+project_path: $PROJECT_DIR
+agent_path: $SCRIPT_DIR
+
+# Cache settings
+cache_enabled: true
+cache_dir: ANALYSIS_CACHE
+
+# Database settings (optional)
+database:
+  host: localhost
+  port: 3306
+  name: ragnarok
+  user: ragnarok
+  password: ragnarok
+
+# Translation settings
+translation:
+  default_source: english
+  supported_languages: [thai, spanish, french, german]
+
+# Backup settings
+backup:
+  enabled: true
+  max_backups: 10
+  compress: true
+EOF
+    echo "✅ Configuration file created: ro_agent_config.yml"
+fi
+
+# Create alias for easy access
+echo ""
+echo "🔗 Creating command alias..."
+
+SHELL_RC=""
+if [ -f "$HOME/.bashrc" ]; then
+    SHELL_RC="$HOME/.bashrc"
+elif [ -f "$HOME/.zshrc" ]; then
+    SHELL_RC="$HOME/.zshrc"
+fi
+
+if [ -n "$SHELL_RC" ]; then
+    # Check if alias already exists
+    if ! grep -q "ro_agent" "$SHELL_RC"; then
+        echo "" >> "$SHELL_RC"
+        echo "# Ragnarok Online Agent Alias" >> "$SHELL_RC"
+        echo "alias ro_agent='$PYTHON_CMD $SCRIPT_DIR/src/cli.py'" >> "$SHELL_RC"
+        echo "✅ Added alias 'ro_agent' to $SHELL_RC"
+        echo "💡 Restart your terminal or run 'source $SHELL_RC' to use the alias"
+    else
+        echo "ℹ️  Alias 'ro_agent' already exists"
+    fi
+fi
+
+# Create desktop shortcut (optional)
+echo ""
+read -p "🤔 Create desktop shortcut? [y/N]: " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    DESKTOP_FILE="$HOME/Desktop/ro_agent.desktop"
+    cat > "$DESKTOP_FILE" << EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ragnarok Online Agent
+Comment=Manage your RO server with AI assistance
+Exec=$PYTHON_CMD $SCRIPT_DIR/src/cli.py
+Icon=$SCRIPT_DIR/icon.png
+Terminal=true
+Categories=Game;Utility;
+EOF
+    chmod +x "$DESKTOP_FILE"
+    echo "✅ Desktop shortcut created"
+fi
+
+# Final setup check
+echo ""
+echo "🔍 Running setup verification..."
+
+# Test import
+$PYTHON_CMD -c "import sys; sys.path.insert(0, '$SCRIPT_DIR/src'); import cli; print('✅ CLI module imported successfully')"
+
+if [ $? -eq 0 ]; then
+    echo "✅ Setup verification passed"
+else
+    echo "⚠️  Setup verification failed - some modules may not work correctly"
+fi
+
+# Show completion message
+echo ""
+echo "🎉 Setup Complete!"
+echo "=================="
+echo ""
+echo "🗡️  Ragnarok Online Agent is ready to use!"
+echo ""
+echo "📖 Quick Start:"
+echo "   cd \"$PROJECT_DIR\""
+if [ -d "ro_agent_env" ]; then
+    echo "   source ro_agent_env/bin/activate"
+fi
+echo "   $PYTHON_CMD $SCRIPT_DIR/src/cli.py --help"
+if [ -n "$SHELL_RC" ]; then
+    echo "   # Or use the alias: ro_agent --help"
+fi
+echo ""
+echo "📊 Detected Emulator: $EMULATOR"
+echo "📁 Project Path: $PROJECT_DIR"
+echo "📁 Agent Path: $SCRIPT_DIR"
+echo ""
+echo "💡 Useful commands:"
+echo "   ro_agent status              # Check server status"
+echo "   ro_agent files organize      # Organize your files"
+echo "   ro_agent script npc          # Generate NPC scripts"
+echo "   ro_agent update items        # Update from kRO"
+echo "   ro_agent ask \"how to setup\"  # Get help"
+echo ""
+echo "📚 For more information, see: $SCRIPT_DIR/README.md"
+echo ""
+echo "🚀 Happy server managing!"
