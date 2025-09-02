@@ -1,27 +1,63 @@
-# Ragnarok Online Agent Configuration
+# Ragnarok Online Agent Configuration - Testing Environment
 emulator: rathena
 project_path: C:\Users\Chaos\Desktop\WORKSPACE\rathena
 agent_path: C:\Users\Chaos\Desktop\WORKSPACE\rathena\Ragnarok Online Agent
 
-# Cache settings
+# Testing Environment Settings
+environment: testing
+debug:
+  enabled: true
+  log_level: DEBUG
+  performance_logging: true
+  cache_debug: true
+  
+# Cache settings (optimized for testing)
 cache_enabled: true
 cache_dir: ANALYSIS_CACHE
+cache:
+  ttl_default: 1800      # 30 minutes (shorter for testing)
+  ttl_database: 900      # 15 minutes
+  ttl_scripts: 3600      # 1 hour
+  ttl_static: 43200      # 12 hours (shorter for testing)
+  auto_cleanup: true
+  compression: true
+  performance_logging: true
+  max_memory_mb: 50      # Limit memory usage in testing
 
-# Database settings (optional)
+# Database settings (testing)
 database:
   host: localhost
   port: 3306
-  name: ragnarok
+  name: ragnarok_test
   user: ragnarok
   password: ragnarok
+  connection_pool_size: 5
+  query_cache_enabled: true
 
 # Translation settings
 translation:
   default_source: english
   supported_languages: [thai, spanish, french, german]
 
-# Backup settings
+# Backup settings (enhanced for testing)
 backup:
   enabled: true
-  max_backups: 10
+  max_backups: 20        # More backups in testing
   compress: true
+  auto_backup_interval: 3600  # Every hour
+  backup_on_critical_ops: true
+  
+# Performance monitoring
+monitoring:
+  enabled: true
+  metrics_collection: true
+  performance_alerts: true
+  resource_monitoring: true
+  
+# Testing specific settings  
+testing:
+  validate_all_operations: true
+  extensive_logging: true
+  performance_benchmarking: true
+  safety_checks_enabled: true
+  mock_external_services: false
