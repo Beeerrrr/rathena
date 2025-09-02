@@ -48,6 +48,12 @@ class ROAgent:
             return "hercules"
         elif (self.server_path / "openkore").exists():
             return "openkore"
+        elif (self.server_path / "conf").exists() and (self.server_path / "npc").exists():
+            # Check for rAthena structure
+            if (self.server_path / "conf" / "char_athena.conf").exists():
+                return "rathena"
+            elif (self.server_path / "conf" / "char-server.conf").exists():
+                return "hercules"
         else:
             return "unknown"
 

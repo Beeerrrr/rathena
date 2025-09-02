@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(git checkout:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python:*)",
+      "Bash(bash:*)",
+      "Bash(cmd:*)",
+      "Bash(ro_agent.bat --help)",
+      "Bash(ro_agent.bat status)"
     ],
     "deny": [],
     "ask": []

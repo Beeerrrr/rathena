@@ -1,0 +1,277 @@
+name: Upstream Monitor
+
+on:
+  schedule:
+    # Check for upstream changes every 6 hours
+    - cron: '0 */6 * * *'
+  
+  workflow_dispatch:
+
+env:
+  UPSTREAM_REPO: rathena/rathena
+  UPSTREAM_BRANCH: master
+
+jobs:
+  monitor-upstream:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Git
+      run: |
+        git config user.name "Upstream Monitor Bot"
+        git config user.email "upstream-monitor@noreply.github.com"
+    
+    - name: Add upstream remote
+      run: |
+        git remote add upstream https://github.com/${{ env.UPSTREAM_REPO }}.git || true
+        git fetch upstream ${{ env.UPSTREAM_BRANCH }}
+    
+    - name: Check for new releases
+      id: check_releases
+      run: |
+        # Get latest release from upstream
+        LATEST_RELEASE=$(curl -s "https://api.github.com/repos/${{ env.UPSTREAM_REPO }}/releases/latest" | jq -r '.tag_name // empty')
+        
+        if [ -n "$LATEST_RELEASE" ]; then
+          echo "latest_release=$LATEST_RELEASE" >> $GITHUB_OUTPUT
+          
+          # Check if we have this release tagged
+          if git tag -l | grep -q "^upstream-$LATEST_RELEASE$"; then
+            echo "release_is_new=false" >> $GITHUB_OUTPUT
+          else
+            echo "release_is_new=true" >> $GITHUB_OUTPUT
+            
+            # Get release info
+            curl -s "https://api.github.com/repos/${{ env.UPSTREAM_REPO }}/releases/latest" | jq -r '.body' > release_notes.md
+          fi
+        else
+          echo "release_is_new=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Check for important commits
+      id: check_commits
+      run: |
+        # Get commits since last check
+        LAST_CHECK_FILE=".github/last_upstream_check"
+        
+        if [ -f "$LAST_CHECK_FILE" ]; then
+          LAST_COMMIT=$(cat $LAST_CHECK_FILE)
+        else
+          # First run - check last 24 hours
+          LAST_COMMIT=$(git log --since="24 hours ago" --format="%H" -1 upstream/${{ env.UPSTREAM_BRANCH }})
+        fi
+        
+        # Get new commits
+        NEW_COMMITS=$(git rev-list --count $LAST_COMMIT..upstream/${{ env.UPSTREAM_BRANCH }} 2>/dev/null || echo "0")
+        echo "new_commits=$NEW_COMMITS" >> $GITHUB_OUTPUT
+        
+        if [ "$NEW_COMMITS" -gt "0" ]; then
+          echo "has_new_commits=true" >> $GITHUB_OUTPUT
+          
+          # Analyze commits for important changes
+          echo "## New Upstream Commits" > commit_analysis.md
+          echo "" >> commit_analysis.md
+          
+          git log --oneline --no-merges $LAST_COMMIT..upstream/${{ env.UPSTREAM_BRANCH }} | while read commit; do
+            echo "- $commit" >> commit_analysis.md
+            
+            # Check for breaking changes or important keywords
+            if echo "$commit" | grep -iE "(breaking|security|fix|critical|important|database|config)" > /dev/null; then
+              echo "  ⚠️ **Important change detected**" >> commit_analysis.md
+            fi
+          done
+          
+          # Update last check
+          git rev-parse upstream/${{ env.UPSTREAM_BRANCH }} > $LAST_CHECK_FILE
+        else
+          echo "has_new_commits=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Analyze impact on Chaos branch
+      if: steps.check_commits.outputs.has_new_commits == 'true'
+      run: |
+        echo "## Chaos Branch Impact Analysis" >> impact_analysis.md
+        echo "" >> impact_analysis.md
+        
+        # Check for potential conflicts
+        git checkout chaos 2>/dev/null || echo "Chaos branch not found locally"
+        
+        if git show-branch chaos >/dev/null 2>&1; then
+          # Try merge simulation
+          MERGE_CONFLICTS=$(git merge-tree $(git merge-base chaos upstream/${{ env.UPSTREAM_BRANCH }}) chaos upstream/${{ env.UPSTREAM_BRANCH }}) | grep -c "<<<<<<< " || echo "0")
+          
+          echo "- Potential merge conflicts: $MERGE_CONFLICTS" >> impact_analysis.md
+          
+          if [ "$MERGE_CONFLICTS" -gt "0" ]; then
+            echo "- ⚠️ **Manual merge required**" >> impact_analysis.md
+            echo "- Files with conflicts:" >> impact_analysis.md
+            
+            git merge-tree $(git merge-base chaos upstream/${{ env.UPSTREAM_BRANCH }}) chaos upstream/${{ env.UPSTREAM_BRANCH }}) | grep -E "^\+\+\+|^\-\-\-" | sort -u | sed 's/^[+-]\{3\} [ab]\///g' | sed 's/^/  - /' >> impact_analysis.md
+          else
+            echo "- ✅ **Clean merge expected**" >> impact_analysis.md
+          fi
+          
+          # Check modified files overlap
+          CHAOS_MODIFIED=$(git diff --name-only main..chaos | sort)
+          UPSTREAM_MODIFIED=$(git diff --name-only main..upstream/${{ env.UPSTREAM_BRANCH }} | sort)
+          
+          COMMON_FILES=$(comm -12 <(echo "$CHAOS_MODIFIED") <(echo "$UPSTREAM_MODIFIED") | wc -l)
+          echo "- Files modified in both branches: $COMMON_FILES" >> impact_analysis.md
+          
+        else
+          echo "- ⚠️ Chaos branch not available for analysis" >> impact_analysis.md
+        fi
+    
+    - name: Create issue for new release
+      if: steps.check_releases.outputs.release_is_new == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          let releaseNotes = '';
+          try {
+            releaseNotes = fs.readFileSync('release_notes.md', 'utf8');
+          } catch (e) {
+            releaseNotes = 'Release notes not available';
+          }
+          
+          const issueBody = `# New rAthena Release: ${{ steps.check_releases.outputs.latest_release }}
+          
+          A new release has been detected from the upstream rAthena repository.
+          
+          ## Release Information
+          - **Release Tag**: ${{ steps.check_releases.outputs.latest_release }}
+          - **Upstream Repository**: ${{ env.UPSTREAM_REPO }}
+          - **Detection Time**: ${new Date().toISOString()}
+          
+          ## Release Notes
+          ${releaseNotes}
+          
+          ## Action Required
+          - [ ] Review release notes for breaking changes
+          - [ ] Test compatibility with Chaos branch features
+          - [ ] Update main branch to latest release
+          - [ ] Merge/rebase Chaos branch with new changes
+          - [ ] Update documentation if needed
+          - [ ] Test all Chaos-specific features
+          
+          ## Automated Checks
+          This issue was created automatically by the upstream monitoring workflow.
+          
+          ---
+          *This issue will be automatically closed when the release is integrated.*`;
+          
+          const { data: issue } = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: \`Upstream Release: \${{ steps.check_releases.outputs.latest_release }}\`,
+            body: issueBody,
+            labels: ['upstream-release', 'sync-required', 'high-priority']
+          });
+          
+          console.log(\`Created issue #\${issue.number}\`);
+          
+          // Tag the release in our repo
+          await github.rest.git.createRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: \`refs/tags/upstream-\${{ steps.check_releases.outputs.latest_release }}\`,
+            sha: context.sha
+          });
+    
+    - name: Create issue for important commits
+      if: steps.check_commits.outputs.has_new_commits == 'true' && steps.check_commits.outputs.new_commits > 10
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          let commitAnalysis = '';
+          try {
+            commitAnalysis = fs.readFileSync('commit_analysis.md', 'utf8');
+          } catch (e) {
+            commitAnalysis = 'Commit analysis not available';
+          }
+          
+          let impactAnalysis = '';
+          try {
+            impactAnalysis = fs.readFileSync('impact_analysis.md', 'utf8');
+          } catch (e) {
+            impactAnalysis = 'Impact analysis not available';
+          }
+          
+          const issueBody = \`# Upstream Commits Detected
+          
+          Significant upstream activity has been detected ($${{ steps.check_commits.outputs.new_commits }} new commits).
+          
+          ## Commit Analysis
+          \${commitAnalysis}
+          
+          ## Impact Analysis
+          \${impactAnalysis}
+          
+          ## Recommended Actions
+          - [ ] Review new commits for important changes
+          - [ ] Check for security updates
+          - [ ] Test compatibility with Chaos features
+          - [ ] Plan sync strategy if conflicts expected
+          - [ ] Update documentation if API changes detected
+          
+          ## Auto-sync Consideration
+          Based on the analysis above, consider whether to:
+          - Trigger immediate sync (low-risk changes)
+          - Schedule manual review (high-risk changes)
+          - Wait for next regular sync cycle
+          
+          ---
+          *This issue was created automatically by the upstream monitoring workflow.*\`;
+          
+          const { data: issue } = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: \`Upstream Activity: \${{ steps.check_commits.outputs.new_commits }} new commits\`,
+            body: issueBody,
+            labels: ['upstream-activity', 'review-required']
+          });
+          
+          console.log(\`Created issue #\${issue.number}\`);
+    
+    - name: Update monitoring state
+      run: |
+        # Commit the last check state
+        git add .github/last_upstream_check
+        
+        if git diff --cached --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Update upstream monitoring state [skip ci]"
+          git push origin HEAD:chaos
+        fi
+    
+    - name: Summary
+      run: |
+        echo "# Upstream Monitoring Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.check_releases.outputs.release_is_new }}" = "true" ]; then
+          echo "🚨 **New Release**: ${{ steps.check_releases.outputs.latest_release }}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "ℹ️ No new releases" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "📊 **New Commits**: ${{ steps.check_commits.outputs.new_commits }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.check_commits.outputs.has_new_commits }}" = "true" ]; then
+          if [ "${{ steps.check_commits.outputs.new_commits }}" -gt "10" ]; then
+            echo "⚠️ Significant activity detected - issue created" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Minor activity - monitoring continues" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi

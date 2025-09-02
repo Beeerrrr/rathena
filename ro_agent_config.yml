@@ -1,0 +1,27 @@
+# Ragnarok Online Agent Configuration
+emulator: rathena
+project_path: C:\Users\Chaos\Desktop\WORKSPACE\rathena
+agent_path: C:\Users\Chaos\Desktop\WORKSPACE\rathena\Ragnarok Online Agent
+
+# Cache settings
+cache_enabled: true
+cache_dir: ANALYSIS_CACHE
+
+# Database settings (optional)
+database:
+  host: localhost
+  port: 3306
+  name: ragnarok
+  user: ragnarok
+  password: ragnarok
+
+# Translation settings
+translation:
+  default_source: english
+  supported_languages: [thai, spanish, french, german]
+
+# Backup settings
+backup:
+  enabled: true
+  max_backups: 10
+  compress: true

@@ -1,0 +1,175 @@
+# rAthena Architecture Analysis Cache
+# Generated for Chaos branch optimization
+
+architecture:
+  servers:
+    login_server:
+      port: 6900
+      source: "src/login/"
+      config: "conf/login_athena.conf"
+      purpose: "Account authentication and session management"
+      key_files:
+        - "login.cpp"
+        - "loginchrif.hpp"
+        - "account.hpp"
+    
+    char_server:
+      port: 6121
+      source: "src/char/"
+      config: "conf/char_athena.conf"
+      purpose: "Character data management and selection"
+      key_files:
+        - "char.cpp" 
+        - "char_logif.hpp"
+        - "char_mapif.hpp"
+    
+    map_server:
+      port: 5121
+      source: "src/map/"
+      config: "conf/map_athena.conf"
+      purpose: "Core game logic and world simulation"
+      modules: 50+
+      key_files:
+        - "map.cpp"
+        - "chrif.hpp"
+        - "intif.hpp"
+        - "battle.cpp"
+        - "skill.cpp"
+        - "npc.cpp"
+    
+    web_server:
+      source: "src/web/"
+      config: "conf/web_athena.conf"
+      purpose: "HTTP API and web features"
+      uses: "httplib"
+
+  communication_flow: |
+    Client ↔ Login Server ↔ Character Server ↔ Map Server
+                                    ↓
+                              Web Server (parallel)
+
+  core_systems:
+    database:
+      type: "MySQL/MariaDB"
+      yaml_files: 180
+      sql_files: 102
+      schemas: "sql-files/"
+      data: "db/"
+      
+    configuration:
+      main_configs:
+        - "login_athena.conf"
+        - "char_athena.conf" 
+        - "map_athena.conf"
+        - "inter_athena.conf"
+        - "battle_athena.conf"
+      battle_modules: 18
+      import_system: "conf/import-tmpl/"
+      
+    scripts:
+      npc_dirs:
+        - "npc/pre-re/"
+        - "npc/re/"
+        - "npc/" 
+      categories:
+        - "cities"
+        - "jobs" 
+        - "quests"
+        - "merchants"
+        - "instances"
+        - "guilds"
+        - "battleground"
+
+optimization_targets:
+  database_layer:
+    current: "Direct MySQL queries"
+    potential: 
+      - "Connection pooling"
+      - "Query result caching"
+      - "Prepared statement optimization"
+    files:
+      - "src/common/db.hpp"
+      - "src/common/sql.hpp"
+      
+  inter_server:
+    current: "Socket-based communication"
+    potential:
+      - "Message queuing"
+      - "Connection reuse"
+      - "Batch operations"
+    files:
+      - "src/login/loginchrif.hpp"
+      - "src/char/char_mapif.hpp"
+      
+  map_server:
+    current: "Linear processing"
+    potential:
+      - "Spatial indexing"
+      - "Chunk-based loading"
+      - "Event batching"
+    files:
+      - "src/map/map.cpp"
+      - "src/map/battle.cpp"
+      
+  script_engine:
+    current: "Interpreted scripts"
+    potential:
+      - "Bytecode compilation"
+      - "Script result caching"
+      - "Precompiled headers"
+    files:
+      - "src/map/script.cpp"
+      - "src/map/npc.cpp"
+
+branch_strategy:
+  main_branch:
+    purpose: "Stable rAthena upstream sync point"
+    updates: "Manual sync from rAthena/rAthena"
+    protection: "No direct commits"
+    
+  chaos_branch:
+    purpose: "Custom development and optimizations"
+    base: "main branch"
+    features:
+      - "Performance optimizations"
+      - "Custom game features"
+      - "Enhanced caching"
+      - "Monitoring systems"
+    
+  sync_workflow:
+    upstream_to_main: "Pull latest rAthena changes"
+    main_to_chaos: "Merge/rebase custom changes"
+    conflict_resolution: "Prioritize custom optimizations"
+
+performance_monitoring:
+  metrics:
+    - "Server response times"
+    - "Database query performance" 
+    - "Memory usage patterns"
+    - "Inter-server communication latency"
+    - "Script execution times"
+    
+  tools:
+    - "Performance profiling"
+    - "Database query analysis"
+    - "Memory leak detection"
+    - "Network latency monitoring"
+
+cache_system:
+  levels:
+    l1_memory: "In-process caching"
+    l2_shared: "Inter-server shared cache" 
+    l3_persistent: "Database result caching"
+    
+  candidates:
+    - "Character data"
+    - "Item definitions"
+    - "Monster stats"
+    - "Skill calculations"
+    - "Map data"
+    - "NPC script results"
+    
+  implementation:
+    memory_pools: "src/common/malloc.hpp"
+    timer_system: "src/common/timer.hpp"
+    database_layer: "src/common/db.hpp"
