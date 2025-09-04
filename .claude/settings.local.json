@@ -9,7 +9,8 @@
       "Bash(bash:*)",
       "Bash(cmd:*)",
       "Bash(ro_agent.bat --help)",
-      "Bash(ro_agent.bat status)"
+      "Bash(ro_agent.bat status)",
+      "Bash(git merge:*)"
     ],
     "deny": [],
     "ask": []

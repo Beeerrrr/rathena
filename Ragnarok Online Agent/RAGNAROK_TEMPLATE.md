@@ -20,6 +20,24 @@ This AI assistant helps you manage your Ragnarok Online private server with inte
 - **eAthena**: Legacy emulator support
 - **Custom**: Extensible for other RO implementations
 
+## 🪟 Windows/PwSh Guidance (Search & IO)
+- Prefer `rg` (ripgrep). If unavailable, use `Select-String -SimpleMatch -CaseSensitive:$false`.
+- Quote paths with spaces via `-LiteralPath`, e.g., `-LiteralPath 'Ragnarok Online Agent\RAGNAROK_TEMPLATE.md'`.
+- Keep file reads ≤ 250 lines per chunk: `Get-Content -TotalCount 250`.
+
+## 💾 Cache Helpers
+- Initialize cache from templates to speed up first run and reduce token usage:
+  - PowerShell: `& '.\Ragnarok Online Agent\scripts\cache-init.ps1'`
+  - Bash: `./Ragnarok\ Online\ Agent/scripts/cache-init.sh`
+- Validate JSON under caches quickly:
+  - PowerShell: `& '.\Ragnarok Online Agent\scripts\validate-json.ps1'`
+  - Bash: `./Ragnarok\ Online\ Agent/scripts/validate-json.sh`
+
+Commit with real-time timestamp (Windows):
+```
+git commit -m "feat: ro change; [$(& '.\\Ragnarok Online Agent\\scripts\\timestamp.ps1')]"
+```
+
 ## 🚀 Quick Commands
 
 ```bash

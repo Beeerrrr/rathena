@@ -8,6 +8,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 
 # Add src directory to path for imports
 current_dir = os.path.dirname(__file__)
@@ -28,34 +29,62 @@ except ImportError:
     from database_updater import DatabaseUpdater
     from translation_tools import TranslationTools
     from knowledge_base import KnowledgeBase
+    from shared_context import SharedContext
+else:
+    from .shared_context import SharedContext
 
 class ROAgent:
     """Main Ragnarok Online Agent class"""
 
     def __init__(self, server_path: Optional[str] = None):
         self.server_path = Path(server_path) if server_path else Path.cwd()
+        self.ctx = SharedContext(self.server_path)
         self.file_manager = FileManager(self.server_path)
         self.script_generator = ScriptGenerator(self.server_path)
         self.database_updater = DatabaseUpdater(self.server_path)
         self.translation_tools = TranslationTools(self.server_path)
-        self.knowledge_base = KnowledgeBase()
+        self.knowledge_base = KnowledgeBase(shared_context=self.ctx)
+
+        # Initialize workspace metadata
+        self._init_workspace_meta()
+
+    def _init_workspace_meta(self):
+        try:
+            name = self.server_path.name
+            self.ctx.set("workspace.name", name)
+            # Minimal tech stack guess
+            stack = "rAthena/Hercules/OpenKore"
+            self.ctx.set("workspace.tech_stack", stack)
+            # Record emulator detection
+            emulator = self.detect_emulator()
+            last = self.ctx.get("last.ro_agent", {}) or {}
+            prev = last.get("emulator")
+            self.ctx.set("last.ro_agent", {**last, "emulator": emulator})
+            if prev and prev != emulator and emulator != "unknown":
+                # Log a notice about emulator change
+                self.ctx.log_event("ro_agent", "emulator_changed", {"from": prev, "to": emulator})
+        except Exception:
+            pass
 
     def detect_emulator(self) -> str:
         """Detect which RO emulator is being used"""
-        if (self.server_path / "rathena").exists():
-            return "rathena"
-        elif (self.server_path / "hercules").exists():
-            return "hercules"
-        elif (self.server_path / "openkore").exists():
-            return "openkore"
-        elif (self.server_path / "conf").exists() and (self.server_path / "npc").exists():
-            # Check for rAthena structure
-            if (self.server_path / "conf" / "char_athena.conf").exists():
+        # Common layouts:
+        # - rAthena checked either by a nested 'rathena' folder or typical dirs at project root
+        # - Hercules often uses similar dirs; only disambiguate when explicit folder present
+        root = self.server_path
+        try:
+            if (root / "rathena").exists():
                 return "rathena"
-            elif (self.server_path / "conf" / "char-server.conf").exists():
+            # Typical rAthena tree when repo root is the emulator itself
+            if (root / "npc").exists() and (root / "db").exists() and (root / "conf").exists():
+                return "rathena"
+            if (root / "hercules").exists():
                 return "hercules"
-        else:
-            return "unknown"
+            if (root / "openkore").exists():
+                return "openkore"
+        except Exception:
+            pass
+        return "unknown"
 
 @click.group()
 @click.option('--server-path', '-p', default=None,
@@ -80,6 +109,10 @@ def status(ctx):
     click.echo(f"Server Path: {agent.server_path}")
     click.echo(f"Detected Emulator: {emulator}")
     click.echo("Status: Active and ready")
+    try:
+        agent.ctx.log_event("ro_agent", "status_checked", {"emulator": emulator})
+    except Exception:
+        pass
 
 @cli.command()
 @click.argument('query')
@@ -104,6 +137,10 @@ def learn_path(ctx, path_name):
     agent = ctx.obj['agent']
     result = agent.knowledge_base.get_learning_path(path_name)
     click.echo(result)
+    try:
+        agent.ctx.set("progress.ro_agent.last_learning_path", path_name)
+    except Exception:
+        pass
 
 @learn.command('tutorial')
 @click.argument('level')
@@ -113,6 +150,13 @@ def learn_tutorial(ctx, level):
     agent = ctx.obj['agent']
     result = agent.knowledge_base.get_tutorial(level)
     click.echo(result)
+    try:
+        # Initialize or move pointer to this tutorial
+        agent.ctx.set("progress.ro_agent.current_tutorial", level)
+        agent.ctx.set("progress.ro_agent.current_step", 0)
+        agent.ctx.log_event("ro_agent", "tutorial_opened", {"level": level})
+    except Exception:
+        pass
 
 @learn.command('concept')
 @click.argument('concept_name')
@@ -130,6 +174,10 @@ def learn_next(ctx):
     agent = ctx.obj['agent']
     result = agent.knowledge_base.get_next_step()
     click.echo(result)
+    try:
+        agent.ctx.log_event("ro_agent", "tutorial_next", {})
+    except Exception:
+        pass
 
 @learn.command('progress')
 @click.pass_context
@@ -138,6 +186,10 @@ def learn_progress(ctx):
     agent = ctx.obj['agent']
     result = agent.knowledge_base.get_progress()
     click.echo(result)
+    try:
+        agent.ctx.log_event("ro_agent", "tutorial_progress_viewed", {})
+    except Exception:
+        pass
 
 # File Management Commands
 @cli.group()
@@ -157,6 +209,10 @@ def files_organize(ctx, type, destination):
     agent = ctx.obj['agent']
     result = agent.file_manager.organize_files(type, destination)
     click.echo(result)
+    try:
+        agent.ctx.log_event("ro_agent", "files_organized", {"type": type, "destination": destination or "default"})
+    except Exception:
+        pass
 
 @files.command('backup')
 @click.option('--configs', is_flag=True, help='Backup configuration files')
@@ -168,6 +224,11 @@ def files_backup(ctx, configs, database, scripts):
     agent = ctx.obj['agent']
     result = agent.file_manager.create_backup(configs, database, scripts)
     click.echo(result)
+    try:
+        agent.ctx.set("last.ro_agent.last_backup", datetime.utcnow().isoformat() + "Z")
+        agent.ctx.log_event("ro_agent", "backup_created", {"configs": configs, "database": database, "scripts": scripts})
+    except Exception:
+        pass
 
 # Script Generation Commands
 @cli.group()
@@ -188,6 +249,10 @@ def script_npc(ctx, type, name, items, dialog):
     agent = ctx.obj['agent']
     result = agent.script_generator.generate_npc(type, name, items, dialog)
     click.echo(result)
+    try:
+        agent.ctx.log_event("ro_agent", "script_generated", {"kind": "npc", "type": type, "name": name})
+    except Exception:
+        pass
 
 @script.command('item')
 @click.option('--id', '-i', required=True, type=int, help='Item ID')
@@ -200,6 +265,10 @@ def script_item(ctx, id, name, type, price):
     agent = ctx.obj['agent']
     result = agent.script_generator.generate_item(id, name, type, price)
     click.echo(result)
+    try:
+        agent.ctx.log_event("ro_agent", "script_generated", {"kind": "item", "id": id, "name": name})
+    except Exception:
+        pass
 
 # Database Update Commands
 @cli.group()
@@ -220,6 +289,10 @@ def update_items(ctx, source, version, range, backup):
     agent = ctx.obj['agent']
     result = agent.database_updater.update_items(source, version, range, backup)
     click.echo(result)
+    try:
+        agent.ctx.log_event("ro_agent", "db_updated", {"what": "items", "source": source, "version": version, "range": range or "all"})
+    except Exception:
+        pass
 
 @update.command('mobs')
 @click.option('--source', '-s', default='kro', help='Data source')
@@ -230,6 +303,10 @@ def update_mobs(ctx, source, backup):
     agent = ctx.obj['agent']
     result = agent.database_updater.update_mobs(source, backup)
     click.echo(result)
+    try:
+        agent.ctx.log_event("ro_agent", "db_updated", {"what": "mobs", "source": source})
+    except Exception:
+        pass
 
 # Translation Commands
 @cli.group()
@@ -247,6 +324,10 @@ def translate_items(ctx, from_lang, to_lang, file):
     agent = ctx.obj['agent']
     result = agent.translation_tools.translate_file(file, from_lang, to_lang)
     click.echo(result)
+    try:
+        agent.ctx.log_event("ro_agent", "translated", {"what": "items", "file": file, "from": from_lang, "to": to_lang})
+    except Exception:
+        pass
 
 @translate.command('client')
 @click.option('--files', required=True, help='Client files to translate (comma-separated)')
@@ -258,6 +339,10 @@ def translate_client(ctx, files, language):
     file_list = [f.strip() for f in files.split(',')]
     result = agent.translation_tools.translate_client_files(file_list, language)
     click.echo(result)
+    try:
+        agent.ctx.log_event("ro_agent", "translated", {"what": "client_files", "count": len(file_list), "to": language})
+    except Exception:
+        pass
 
 if __name__ == '__main__':
     cli()

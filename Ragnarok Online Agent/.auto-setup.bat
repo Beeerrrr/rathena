@@ -2,45 +2,45 @@
 REM Ragnarok Online Agent Auto-Setup Script (Windows)
 REM This script automatically sets up the RO Agent for your project
 
-echo 🗡️ Ragnarok Online Server Management Agent Setup
-echo ==================================================
+echo Ragnarok Online Server Management Agent Setup
+echo ==============================================
 
 REM Get the directory where this script is located
 set "SCRIPT_DIR=%~dp0"
 set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 set "PROJECT_DIR=%cd%"
 
-echo 📍 Project Directory: %PROJECT_DIR%
-echo 📍 Agent Directory: %SCRIPT_DIR%
+echo Project Directory: %PROJECT_DIR%
+echo Agent Directory: %SCRIPT_DIR%
 
 REM Check if we're in a RO server directory
 echo.
-echo 🔍 Detecting RO server structure...
+echo Detecting RO server structure...
 
 if exist "rathena" (
-    echo ✅ Detected rAthena server structure
+    echo Detected rAthena server structure
     set EMULATOR=rathena
 ) else if exist "npc" (
     if exist "db" (
         if exist "conf" (
-            echo ✅ Detected rAthena server structure
+            echo Detected rAthena server structure
             set EMULATOR=rathena
         )
     )
 ) else if exist "hercules" (
-    echo ✅ Detected Hercules server structure
+    echo Detected Hercules server structure
     set EMULATOR=hercules
 ) else if exist "openkore" (
-    echo ✅ Detected OpenKore bot structure
+    echo Detected OpenKore bot structure
     set EMULATOR=openkore
 ) else (
-    echo ⚠️  No specific emulator detected - treating as generic RO project
+    echo No specific emulator detected - treating as generic RO project
     set EMULATOR=generic
 )
 
 REM Create necessary directories
 echo.
-echo 📁 Creating necessary directories...
+echo Creating necessary directories...
 
 if not exist "%PROJECT_DIR%\ANALYSIS_CACHE" mkdir "%PROJECT_DIR%\ANALYSIS_CACHE"
 if not exist "%PROJECT_DIR%\ANALYSIS_CACHE\errors" mkdir "%PROJECT_DIR%\ANALYSIS_CACHE\errors"
@@ -49,23 +49,23 @@ if not exist "%PROJECT_DIR%\ANALYSIS_CACHE\scripts" mkdir "%PROJECT_DIR%\ANALYSI
 if not exist "%PROJECT_DIR%\templates" mkdir "%PROJECT_DIR%\templates"
 if not exist "%PROJECT_DIR%\docs" mkdir "%PROJECT_DIR%\docs"
 
-echo ✅ Directories created
+echo Directories created
 
 REM Check Python installation
 echo.
-echo 🐍 Checking Python installation...
+echo Checking Python installation...
 
 python --version >nul 2>&1
 if %errorlevel% equ 0 (
     set PYTHON_CMD=python
-    echo ✅ Python found
+    echo Python found
 ) else (
     python3 --version >nul 2>&1
     if %errorlevel% equ 0 (
         set PYTHON_CMD=python3
-        echo ✅ Python 3 found
+        echo Python 3 found
     ) else (
-        echo ❌ Python not found. Please install Python 3.8+
+        echo ERROR: Python not found. Please install Python 3.8+
         pause
         exit /b 1
     )
@@ -73,18 +73,18 @@ if %errorlevel% equ 0 (
 
 REM Check Python version
 for /f "tokens=2" %%i in ('%PYTHON_CMD% --version 2^>^&1') do set PYTHON_VERSION=%%i
-echo 📊 Python Version: %PYTHON_VERSION%
+echo Python Version: %PYTHON_VERSION%
 
 REM Create virtual environment (optional)
 echo.
-set /p CREATE_VENV="🤔 Create virtual environment? (recommended) [Y/n]: "
+set /p CREATE_VENV="Create virtual environment? (recommended) [Y/n]: "
 if /i not "%CREATE_VENV%"=="n" (
     if /i not "%CREATE_VENV%"=="N" (
-        echo 📦 Creating virtual environment...
+        echo Creating virtual environment...
         %PYTHON_CMD% -m venv ro_agent_env
         if exist "ro_agent_env" (
-            echo ✅ Virtual environment created: ro_agent_env
-            echo 💡 To activate: ro_agent_env\Scripts\activate
+            echo Virtual environment created: ro_agent_env
+            echo To activate: ro_agent_env\Scripts\activate
             set PYTHON_CMD=%PROJECT_DIR%\ro_agent_env\Scripts\python.exe
         )
     )
@@ -92,14 +92,14 @@ if /i not "%CREATE_VENV%"=="n" (
 
 REM Install dependencies
 echo.
-echo 📦 Installing dependencies...
+echo Installing dependencies...
 
 REM Create requirements.txt if it doesn't exist
 if not exist "%SCRIPT_DIR%\requirements.txt" (
     echo click>=8.0.0> "%SCRIPT_DIR%\requirements.txt"
     echo requests>=2.25.0>> "%SCRIPT_DIR%\requirements.txt"
     echo pyyaml>=5.4.0>> "%SCRIPT_DIR%\requirements.txt"
-    echo ✅ Created requirements.txt
+    echo Created requirements.txt
 )
 
 REM Upgrade pip and install requirements
@@ -107,14 +107,14 @@ REM Upgrade pip and install requirements
 %PYTHON_CMD% -m pip install -r "%SCRIPT_DIR%\requirements.txt"
 
 if %errorlevel% equ 0 (
-    echo ✅ Dependencies installed successfully
+    echo Dependencies installed successfully
 ) else (
-    echo ⚠️  Some dependencies may have failed to install
+    echo WARN: Some dependencies may have failed to install
 )
 
 REM Create configuration file
 echo.
-echo ⚙️  Creating configuration...
+echo Creating configuration...
 
 set CONFIG_FILE=%PROJECT_DIR%\ro_agent_config.yml
 if not exist "%CONFIG_FILE%" (
@@ -145,12 +145,12 @@ if not exist "%CONFIG_FILE%" (
     echo   enabled: true>> "%CONFIG_FILE%"
     echo   max_backups: 10>> "%CONFIG_FILE%"
     echo   compress: true>> "%CONFIG_FILE%"
-    echo ✅ Configuration file created: ro_agent_config.yml
+    echo Configuration file created: ro_agent_config.yml
 )
 
 REM Create command alias (Windows)
 echo.
-echo 🔗 Setting up command alias...
+echo Setting up command alias...
 
 REM Check if we can modify PATH or create a batch file
 set ALIAS_FILE=%PROJECT_DIR%\ro_agent.bat
@@ -158,31 +158,31 @@ echo @echo off> "%ALIAS_FILE%"
 echo "%PYTHON_CMD%" "%SCRIPT_DIR%\src\cli.py" %%*>> "%ALIAS_FILE%"
 
 if exist "%ALIAS_FILE%" (
-    echo ✅ Created alias script: ro_agent.bat
-    echo 💡 You can now use: ro_agent --help
+    echo Created alias script: ro_agent.bat
+    echo You can now use: ro_agent --help
 )
 
 REM Final setup check
 echo.
-echo 🔍 Running setup verification...
+echo Running setup verification...
 
 REM Test import
-%PYTHON_CMD% -c "import sys; sys.path.insert(0, '%SCRIPT_DIR%\src'); import cli; print('✅ CLI module imported successfully')" 2>nul
+%PYTHON_CMD% -c "import sys; sys.path.insert(0, '%SCRIPT_DIR%\src'); import cli; print('CLI module imported successfully')" 2>nul
 
 if %errorlevel% equ 0 (
-    echo ✅ Setup verification passed
+    echo Setup verification passed
 ) else (
-    echo ⚠️  Setup verification failed - some modules may not work correctly
+    echo WARN: Setup verification failed - some modules may not work correctly
 )
 
 REM Show completion message
 echo.
-echo 🎉 Setup Complete!
+echo Setup Complete!
 echo ==================
 echo.
-echo 🗡️  Ragnarok Online Agent is ready to use!
+echo Ragnarok Online Agent is ready to use!
 echo.
-echo 📖 Quick Start:
+echo Quick Start:
 echo    cd "%PROJECT_DIR%"
 if exist "ro_agent_env" (
     echo    ro_agent_env\Scripts\activate
@@ -192,19 +192,37 @@ if exist "%ALIAS_FILE%" (
     echo    # Or use the alias: ro_agent --help
 )
 echo.
-echo 📊 Detected Emulator: %EMULATOR%
-echo 📁 Project Path: %PROJECT_DIR%
-echo 📁 Agent Path: %SCRIPT_DIR%
+echo Detected Emulator: %EMULATOR%
+echo Project Path: %PROJECT_DIR%
+echo Agent Path: %SCRIPT_DIR%
 echo.
-echo 💡 Useful commands:
+echo Useful commands:
 echo    ro_agent status              # Check server status
 echo    ro_agent files organize      # Organize your files
 echo    ro_agent script npc          # Generate NPC scripts
 echo    ro_agent update items        # Update from kRO
 echo    ro_agent ask "how to setup"  # Get help
 echo.
-echo 📚 For more information, see: %SCRIPT_DIR%\README.md
+echo For more information, see: %SCRIPT_DIR%\README.md
 echo.
-echo 🚀 Happy server managing!
+echo Happy server managing!
 
-pause
+REM Initialize shared workspace context if not exists
+set "STATE_DIR=%PROJECT_DIR%\WORKSPACE_STATE"
+set "STATE_FILE=%STATE_DIR%\context.json"
+if not exist "%STATE_DIR%" mkdir "%STATE_DIR%" 1>nul 2>nul
+if not exist "%STATE_FILE%" (
+  for /f "tokens=2 delims==." %%t in ('wmic os get localdatetime /value ^| find "LocalDateTime"') do set "NOW=%%tZ"
+  set "NOW=%NOW:~0,4%-%NOW:~4,2%-%NOW:~6,2%T%NOW:~8,2%:%NOW:~10,2%:%NOW:~12,2%Z"
+  set "WS_ID=%RANDOM%%RANDOM%"
+  > "%STATE_FILE%" echo {
+  >> "%STATE_FILE%" echo   "meta": {"state_version": 1, "workspace_id": "%WS_ID%", "created": "%NOW%", "template": "Ragnarok Online Agent"},
+  >> "%STATE_FILE%" echo   "workspace": {"name": "%PROJECT_DIR%", "tech_stack": "rAthena/Hercules/OpenKore"},
+  >> "%STATE_FILE%" echo   "instructions": [],
+  >> "%STATE_FILE%" echo   "timeline": [],
+  >> "%STATE_FILE%" echo   "progress": {},
+  >> "%STATE_FILE%" echo   "last": {"emulator": "%EMULATOR%"}
+  >> "%STATE_FILE%" echo }
+  echo Initialized shared context: %STATE_FILE%
+)
+exit /b 0

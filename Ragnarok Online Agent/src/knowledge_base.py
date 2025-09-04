@@ -4,7 +4,6 @@ Provides help, documentation, and troubleshooting guides
 """
 
 import json
-import yaml
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
@@ -12,11 +11,9 @@ from datetime import datetime
 class KnowledgeBase:
     """Knowledge base for RO server management"""
 
-    def __init__(self):
-        # Load architecture analysis cache
-        self.cache_dir = Path(__file__).parent.parent / "ANALYSIS_CACHE"
-        self.architecture_data = self._load_architecture_cache()
+    def __init__(self, shared_context=None):
         self.knowledge = self._load_knowledge_base()
+        self.ctx = shared_context
 
     def _load_knowledge_base(self) -> Dict:
         """Load the knowledge base data"""
@@ -561,25 +558,74 @@ Need more help? Try searching for specific topics like "rathena setup" or "scrip
         return result
 
     def get_next_step(self) -> str:
-        """Get the next step in current tutorial (placeholder for progress tracking)"""
-        return "Progress tracking feature coming soon! For now, use 'ro_agent learn tutorial <level>' to access specific tutorials."
+        """Advance and show the next step in the active tutorial."""
+        if not getattr(self, 'ctx', None):
+            return "Progress tracking requires shared context. Start with: ro_agent learn tutorial <level>."
+
+        level = self.ctx.get("progress.ro_agent.current_tutorial")
+        if not level:
+            return "No active tutorial. Start one: ro_agent learn tutorial beginner"
+
+        tutorial = self.knowledge['tutorials'].get(level)
+        if not tutorial:
+            return f"Unknown tutorial: {level}"
+
+        steps = tutorial.get('steps', [])
+        idx = self.ctx.get("progress.ro_agent.current_step", 0) or 0
+
+        if idx >= len(steps):
+            return f"Tutorial '{level}' completed. You can switch to another tutorial."
+
+        step = steps[idx]
+        if isinstance(step, dict):
+            out = [
+                f"Step {idx+1}/{len(steps)}: {step.get('title','')}",
+                step.get('description', ''),
+            ]
+            if 'command' in step:
+                out.append(f"Command: {step['command']}")
+            if 'explanation' in step:
+                out.append(f"Why: {step['explanation']}")
+            result = "\n".join([s for s in out if s])
+        else:
+            result = f"Step {idx+1}/{len(steps)}: {step}"
+
+        try:
+            self.ctx.set("progress.ro_agent.current_step", idx + 1)
+            completed = self.ctx.get("progress.ro_agent.completed", {}) or {}
+            done = set(completed.get(level, []))
+            done.add(idx)
+            completed[level] = sorted(done)
+            self.ctx.set("progress.ro_agent.completed", completed)
+        except Exception:
+            pass
+
+        return result
 
     def get_progress(self) -> str:
-        """Get learning progress (placeholder for progress tracking)"""
-        return """Learning Progress Tracking
+        """Summarize learning progress using shared context."""
+        if not getattr(self, 'ctx', None):
+            return "Progress tracking requires shared context. Start with: ro_agent learn tutorial <level>."
 
-Current Status: Not yet implemented
-Planned Features:
-- Track completed tutorials
-- Mark learning objectives as complete
-- Provide personalized recommendations
-- Generate progress certificates
+        level = self.ctx.get("progress.ro_agent.current_tutorial") or "(none)"
+        idx = self.ctx.get("progress.ro_agent.current_step", 0) or 0
+        completed = self.ctx.get("progress.ro_agent.completed", {}) or {}
 
-For now, you can manually track your progress by completing tutorials in order:
-1. beginner -> intermediate -> advanced
-2. Or focus on specific areas like scripting or content creation
+        lines = [
+            "Learning Progress",
+            f"Current tutorial: {level}",
+            f"Current step index: {idx}",
+        ]
 
-Use 'ro_agent learn tutorial <level>' to start learning!"""
+        if isinstance(completed, dict) and completed:
+            lines.append("Completed:")
+            for t, steps in completed.items():
+                total = len(self.knowledge['tutorials'].get(t, {}).get('steps', []))
+                lines.append(f"- {t}: {len(steps)}/{total} steps")
+        else:
+            lines.append("Completed: none yet")
+
+        return "\n".join(lines)
 
     def get_available_learning_resources(self) -> str:
         """Get overview of all available learning resources"""
@@ -605,123 +651,4 @@ Use 'ro_agent learn tutorial <level>' to start learning!"""
         result += "- ro_agent learn tutorial beginner     # Start with basics\n"
         result += "- ro_agent learn concept scripting_fundamentals  # Learn RO scripting\n"
 
-        return result
-    
-    def _load_architecture_cache(self) -> Dict:
-        """Load architecture analysis cache for enhanced responses"""
-        try:
-            cache_file = self.cache_dir / "rathena_architecture.yml"
-            if cache_file.exists():
-                with open(cache_file, 'r', encoding='utf-8') as f:
-                    return yaml.safe_load(f)
-        except Exception as e:
-            print(f"Warning: Could not load architecture cache: {e}")
-        return {}
-    
-    def get_architecture_info(self, component: str = None) -> str:
-        """Get rAthena architecture information"""
-        if not self.architecture_data:
-            return "Architecture data not loaded. Run analysis first."
-        
-        if component:
-            # Get specific component info
-            servers = self.architecture_data.get('architecture', {}).get('servers', {})
-            if component in servers:
-                info = servers[component]
-                result = f"**{component.replace('_', ' ').title()}**\n"
-                result += f"Purpose: {info.get('purpose', 'Not specified')}\n"
-                result += f"Port: {info.get('port', 'Not specified')}\n"
-                result += f"Source: {info.get('source', 'Not specified')}\n"
-                result += f"Config: {info.get('config', 'Not specified')}\n"
-                if 'key_files' in info:
-                    result += "Key Files:\n"
-                    for file in info['key_files']:
-                        result += f"• {file}\n"
-                return result
-            else:
-                available = list(servers.keys())
-                return f"Available components: {', '.join(available)}"
-        
-        # Return general architecture overview
-        result = "**rAthena Server Architecture**\n\n"
-        
-        servers = self.architecture_data.get('architecture', {}).get('servers', {})
-        result += "**Server Components:**\n"
-        for name, info in servers.items():
-            result += f"• {name.replace('_', ' ').title()}: {info.get('purpose', 'No description')}\n"
-        
-        flow = self.architecture_data.get('architecture', {}).get('communication_flow', '')
-        if flow:
-            result += f"\n**Communication Flow:**\n{flow}\n"
-        
-        opt_targets = self.architecture_data.get('optimization_targets', {})
-        if opt_targets:
-            result += "\n**Optimization Opportunities:**\n"
-            for target, info in opt_targets.items():
-                result += f"• {target.replace('_', ' ').title()}: {info.get('current', 'Unknown')} → {', '.join(info.get('potential', []))}\n"
-        
-        return result
-    
-    def get_performance_guide(self) -> str:
-        """Get performance optimization guide based on analysis"""
-        if not self.architecture_data:
-            return "Performance data not loaded. Run analysis first."
-        
-        result = "**rAthena Performance Optimization Guide**\n\n"
-        
-        cache_system = self.architecture_data.get('cache_system', {})
-        if cache_system:
-            result += "**Caching Strategy:**\n"
-            levels = cache_system.get('levels', {})
-            for level, desc in levels.items():
-                result += f"• {level.replace('_', ' ').title()}: {desc}\n"
-            
-            result += "\n**Cache Candidates:**\n"
-            candidates = cache_system.get('candidates', [])
-            for candidate in candidates:
-                result += f"• {candidate}\n"
-        
-        monitoring = self.architecture_data.get('performance_monitoring', {})
-        if monitoring:
-            result += "\n**Performance Monitoring:**\n"
-            metrics = monitoring.get('metrics', [])
-            for metric in metrics:
-                result += f"• {metric}\n"
-        
-        return result
-    
-    def get_branch_strategy(self) -> str:
-        """Get branch management strategy information"""
-        if not self.architecture_data:
-            return "Branch strategy data not loaded."
-        
-        strategy = self.architecture_data.get('branch_strategy', {})
-        if not strategy:
-            return "No branch strategy defined."
-        
-        result = "**Branch Management Strategy**\n\n"
-        
-        main = strategy.get('main_branch', {})
-        chaos = strategy.get('chaos_branch', {})
-        
-        result += f"**Main Branch:**\n"
-        result += f"• Purpose: {main.get('purpose', 'Not specified')}\n"
-        result += f"• Updates: {main.get('updates', 'Not specified')}\n"
-        result += f"• Protection: {main.get('protection', 'Not specified')}\n\n"
-        
-        result += f"**Chaos Branch:**\n"
-        result += f"• Purpose: {chaos.get('purpose', 'Not specified')}\n"
-        result += f"• Base: {chaos.get('base', 'Not specified')}\n"
-        features = chaos.get('features', [])
-        if features:
-            result += "• Features:\n"
-            for feature in features:
-                result += f"  - {feature}\n"
-        
-        sync = strategy.get('sync_workflow', {})
-        if sync:
-            result += "\n**Sync Workflow:**\n"
-            for step, desc in sync.items():
-                result += f"• {step.replace('_', ' ').title()}: {desc}\n"
-        
         return result

@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "state_version": 1,
+    "workspace_id": "50c55929b54e0aad"
+  },
+  "workspace": {
+    "name": "rathena",
+    "tech_stack": "rAthena/Hercules/OpenKore"
+  },
+  "last": {
+    "ro_agent": {
+      "emulator": "rathena"
+    }
+  },
+  "timeline": [
+    {
+      "component": "ro_agent",
+      "event": "status_checked",
+      "data": {
+        "emulator": "unknown"
+      },
+      "ts": "2025-09-04T15:28:44.175305Z"
+    },
+    {
+      "component": "ro_agent",
+      "event": "emulator_changed",
+      "data": {
+        "from": "unknown",
+        "to": "rathena"
+      },
+      "ts": "2025-09-04T15:29:08.473166Z"
+    },
+    {
+      "component": "ro_agent",
+      "event": "status_checked",
+      "data": {
+        "emulator": "rathena"
+      },
+      "ts": "2025-09-04T15:29:08.485532Z"
+    }
+  ]
+}

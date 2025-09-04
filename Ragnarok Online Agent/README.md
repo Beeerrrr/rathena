@@ -69,8 +69,45 @@ cd /path/to/your/ro/server/
 ./Ragnarok\ Online\ Agent/.auto-setup.bat      # Windows
 
 # 3. Start managing your server
-python -m ro_agent --help
+python "Ragnarok Online Agent/src/cli.py" --help
 ```
+
+### Windows / PowerShell Notes
+- Prefer `rg` for search; fallback: `Select-String -SimpleMatch -CaseSensitive:$false`.
+- Quote paths with spaces using `-LiteralPath`, e.g., `-LiteralPath 'Ragnarok Online Agent\RAGNAROK_TEMPLATE.md'`.
+- Read files in ≤ 250-line chunks: `Get-Content -TotalCount 250`.
+- Timestamp helper for commit messages: `& '.\\Ragnarok Online Agent\\scripts\\timestamp.ps1'`.
+
+---
+
+## 🧠 Shared Context & Indexing
+
+- Per-project state lives in `WORKSPACE_STATE/context.json` (auto-created by setup). It helps the agent remember instructions, detected emulator, backups, and tutorial progress locally without mixing with other projects.
+- Optional: index your codebase/server to speed up mapping/catch-up:
+  - `python scripts/indexer.py` → writes `WORKSPACE_STATE/code_index.json`
+- Manage context quickly:
+  - See progress: `python scripts/context-cli.py get progress.ro_agent`
+  - Inspect state: `python scripts/context-cli.py dump`
+
+---
+
+## 🔧 Tools & Scripts
+
+- `Ragnarok Online Agent/scripts/context-cli.py`: Manage shared `WORKSPACE_STATE/context.json` (get/set/append/log/dump)
+- `Ragnarok Online Agent/scripts/context.sh` / `Ragnarok Online Agent/scripts/context.ps1`: Shell wrappers
+- `Ragnarok Online Agent/scripts/indexer.py`: Create `WORKSPACE_STATE/code_index.json` to speed up server/code mapping
+
+Convenience wrappers:
+- Cross-platform search: `& '.\\Ragnarok Online Agent\\scripts\\search.ps1' -Pattern 'npc'` (PowerShell) or `./Ragnarok\ Online\ Agent/scripts/search.sh npc` (bash)
+- Commit timestamp: `& '.\\Ragnarok Online Agent\\scripts\\timestamp.ps1'`
+
+Cache helpers:
+- Initialize cache from templates: `& '.\\Ragnarok Online Agent\\scripts\\cache-init.ps1'` or `./Ragnarok\ Online\ Agent/scripts/cache-init.sh`
+- Validate cache JSON: `& '.\\Ragnarok Online Agent\\scripts\\validate-json.ps1'` or `./Ragnarok\ Online\ Agent/scripts/validate-json.sh`
+
+Interoperability: shares `WORKSPACE_STATE/context.json` with other tools if used together in the same project.
+
+Run these from your project root so the context is stored at `./WORKSPACE_STATE/` (invoke via full path as shown).
 
 ---
 
